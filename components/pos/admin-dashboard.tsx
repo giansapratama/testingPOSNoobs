@@ -96,6 +96,9 @@ export function AdminDashboard() {
   const [editProductCategory, setEditProductCategory] = useState('')
   const [editProductPrice, setEditProductPrice] = useState('')
   const [editProductStock, setEditProductStock] = useState('')
+  const [editProductImage, setEditProductImage] = useState<string | undefined>('')
+  const [editProductImagePreview, setEditProductImagePreview] = useState<string | undefined>('')
+  const [isUploadingEditImage, setIsUploadingEditImage] = useState(false)
   
   // Settings form state
   const [storeName, setStoreName] = useState(settings.storeName)
@@ -270,6 +273,8 @@ export function AdminDashboard() {
     setEditProductCategory(product.category)
     setEditProductPrice(product.price.toString())
     setEditProductStock(product.stock.toString())
+    setEditProductImage(product.imageUrl)
+    setEditProductImagePreview(product.imageUrl)
     setIsEditProductOpen(true)
   }
 
@@ -284,14 +289,56 @@ export function AdminDashboard() {
       category: editProductCategory,
       price: parseFloat(editProductPrice),
       stock: parseInt(editProductStock),
+      imageUrl: editProductImage,
     })
     
     if (result.success) {
       toast({ title: 'Success', description: result.message })
       setIsEditProductOpen(false)
       setEditingProduct(null)
+      setEditProductImage('')
+      setEditProductImagePreview('')
     } else {
       toast({ title: 'Error', description: result.message, variant: 'destructive' })
+    }
+  }
+
+  const handleEditProductImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setIsUploadingEditImage(true)
+    try {
+      // Show preview immediately
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setEditProductImagePreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+
+      // Upload to server
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        toast({ title: 'Error', description: error.error || 'Upload failed', variant: 'destructive' })
+        return
+      }
+
+      const data = await response.json()
+      setEditProductImage(data.url)
+      toast({ title: 'Success', description: 'Image uploaded successfully' })
+    } catch (error) {
+      console.error('Upload error:', error)
+      toast({ title: 'Error', description: 'Upload failed', variant: 'destructive' })
+    } finally {
+      setIsUploadingEditImage(false)
     }
   }
 
@@ -521,6 +568,7 @@ export function AdminDashboard() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-gradient-to-r from-amber-500 to-amber-700">
+                  <TableHead className="text-white font-semibold">Image</TableHead>
                   <TableHead className="text-white font-semibold">Product Name</TableHead>
                   <TableHead className="text-white font-semibold">Category</TableHead>
                   <TableHead className="text-white font-semibold">Price</TableHead>
@@ -531,11 +579,24 @@ export function AdminDashboard() {
               <TableBody>
                 {products.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-10 text-gray-500">No products</TableCell>
+                    <TableCell colSpan={6} className="text-center py-10 text-gray-500">No products</TableCell>
                   </TableRow>
                 ) : (
                   products.map(product => (
                     <TableRow key={product.id} className="hover:bg-gray-50">
+                      <TableCell>
+                        {product.imageUrl ? (
+                          <img 
+                            src={product.imageUrl} 
+                            alt={product.name}
+                            className="w-12 h-12 object-cover rounded border border-gray-200"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 bg-gray-200 rounded border border-gray-300 flex items-center justify-center">
+                            <span className="text-xs text-gray-500">No img</span>
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell className="font-semibold text-gray-900">{product.name}</TableCell>
                       <TableCell>
                         <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold">
@@ -1253,6 +1314,44 @@ export function AdminDashboard() {
                 onChange={(e) => setEditProductStock(e.target.value)}
                 placeholder="Enter stock quantity"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-product-image">Product Image</Label>
+              {editProductImagePreview && (
+                <div className="mb-3 relative">
+                  <img 
+                    src={editProductImagePreview} 
+                    alt="Product preview" 
+                    className="w-full h-40 object-cover rounded-lg border border-gray-200"
+                  />
+                </div>
+              )}
+              <div className="flex items-center justify-center w-full">
+                <label 
+                  htmlFor="edit-product-image" 
+                  className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-amber-300 rounded-lg cursor-pointer bg-amber-50 hover:bg-amber-100 transition-colors"
+                >
+                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                    <svg className="w-8 h-8 text-amber-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    <p className="text-xs text-amber-600 font-semibold">Click to upload image</p>
+                    <p className="text-xs text-gray-500">PNG, JPG, GIF up to 5MB</p>
+                  </div>
+                  <input 
+                    id="edit-product-image" 
+                    type="file" 
+                    className="hidden" 
+                    accept="image/*"
+                    onChange={handleEditProductImageUpload}
+                    disabled={isUploadingEditImage}
+                  />
+                </label>
+              </div>
+              {isUploadingEditImage && (
+                <p className="text-xs text-amber-600 font-semibold">Uploading image...</p>
+              )}
             </div>
           </div>
           
